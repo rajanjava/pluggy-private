@@ -533,3 +533,20 @@ def test_remove_plugin_not_found_raises(hc: HookCaller, pm: PluginManager) -> No
     # the failed removal must not have touched the existing registration
     assert len(hc.get_hookimpls()) == 1
     pm.unregister(plugin)
+
+
+def test_call_extra_partial(hc: HookCaller) -> None:
+    from functools import partial
+
+    def on_event(context: str, arg: object) -> tuple[str, object]:
+        return context, arg
+
+    callback = partial(on_event, "demo")
+    assert hc.call_extra([callback], {"arg": 7}) == [("demo", 7)]
+
+    # Callback with default value should use supplied kwarg, not default
+    def on_event_default(context: str, arg: object = "default") -> tuple[str, object]:
+        return context, arg
+
+    callback_default = partial(on_event_default, "demo")
+    assert hc.call_extra([callback_default], {"arg": 7}) == [("demo", 7)]

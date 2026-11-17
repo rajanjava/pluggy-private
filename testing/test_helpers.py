@@ -32,6 +32,47 @@ def test_varnames_default() -> None:
     assert varnames(f) == (("x",), ("y",))
 
 
+def test_varnames_partial() -> None:
+    from functools import partial
+    from functools import wraps
+
+    def f(a, b, c=1) -> None:
+        pass
+
+    assert varnames(partial(f, 1)) == (("b",), ("c",))
+    assert varnames(partial(f, 1, 2)) == ((), ("c",))
+    assert varnames(partial(f, 1, 2, 3)) == ((), ())
+
+    # partial with keyword arguments
+    assert varnames(partial(f, b=2)) == (("a",), ())
+
+    # nested partial
+    p = partial(f, 1)
+    assert varnames(partial(p, 2)) == ((), ("c",))
+
+    # partial wrapping bound method
+    class MyClass:
+        def method(self, x, y=10) -> None:
+            pass
+
+    inst = MyClass()
+    assert varnames(partial(inst.method, 5)) == ((), ("y",))
+
+    # wrapped partial
+    @wraps(p)
+    def wrapped(*args: Any, **kwargs: Any) -> None:
+        p(*args, **kwargs)
+
+    assert varnames(wrapped) == (("b",), ("c",))
+
+    # callable class with partial __call__
+    class CustomCallable:
+        def __init__(self) -> None:
+            self.__call__ = partial(f, 1)  # type: ignore[assignment]
+
+    assert varnames(CustomCallable()) == (("b",), ("c",))
+
+
 def test_varnames_class() -> None:
     class C:
         def __init__(self, x) -> None:

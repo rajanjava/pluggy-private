@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from collections.abc import Mapping
+import functools
 import inspect
 import sys
 import types
@@ -245,6 +246,28 @@ _NOSELF_WARN_SUPPRESS: frozenset[str] = frozenset(
 )
 
 
+def _varnames_from_signature(
+    func: object,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    try:
+        sig = inspect.signature(func)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return (), ()
+    _valid_param_kinds = (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    args: list[str] = []
+    kwargs: list[str] = []
+    for name, param in sig.parameters.items():
+        if param.kind in _valid_param_kinds:
+            if param.default is inspect.Parameter.empty:
+                args.append(name)
+            else:
+                kwargs.append(name)
+    return tuple(args), tuple(kwargs)
+
+
 def varnames(
     func: object, *, legacy_noself: bool = False
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -268,6 +291,8 @@ def varnames(
         except AttributeError:  # pragma: no cover - pypy special case
             return (), ()
         is_bound = True
+    elif isinstance(func, functools.partial):
+        return _varnames_from_signature(func)
     elif not inspect.isroutine(func):  # callable object?
         try:
             # Not a `callable()` check: the `__call__` attribute itself is
@@ -275,11 +300,15 @@ def varnames(
             func = getattr(func, "__call__", func)  # noqa: B004
         except Exception:  # pragma: no cover - pypy special case
             return (), ()
+        if isinstance(func, functools.partial):
+            return _varnames_from_signature(func)
 
     # Track bound methods before unwrapping, since __func__ loses that info.
     if inspect.ismethod(func):
         is_bound = True
     func = inspect.unwrap(func)  # type: ignore[arg-type]
+    if isinstance(func, functools.partial):
+        return _varnames_from_signature(func)
     if inspect.ismethod(func):
         is_bound = True
         func = func.__func__
