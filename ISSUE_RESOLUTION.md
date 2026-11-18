@@ -31,6 +31,11 @@ def test_call_extra_partial(hc: HookCaller) -> None:
 Prior to the fix:
 `TypeError: test_call_extra_partial.<locals>.on_event() missing 1 required positional argument: 'arg'`
 
+## Solution Approach
+1. **Diagnose Why `varnames()` Failed on `functools.partial`:** `inspect.isroutine(partial_obj)` returns `False`, causing `varnames()` to fall back to `partial_obj.__call__`, which is a C `method-wrapper` lacking `__code__`. Catching `AttributeError` silently returned `(), ()`, dropping all arguments.
+2. **Use `inspect.signature()` for `functools.partial`:** Added a dedicated `_varnames_from_signature(func)` helper using Python's standard `inspect.signature()` API—which natively resolves bound positional/keyword arguments on `functools.partial`, nested partials, bound methods, and callable instances—while keeping the fast `__code__` path for normal functions.
+3. **TDD & Regression Safety:** Added unit tests in `testing/test_helpers.py` (`test_varnames_partial`) and integration tests in `testing/test_hookcaller.py` (`test_call_extra_partial`) covering positional, keyword, nested, and wrapped partials.
+
 ## 4. Solution & Code Changes
 1. Added helper `_varnames_from_signature(func)` in `src/pluggy/_decorators.py` to extract positional and keyword parameter names using `inspect.signature()`.
 2. Handled `functools.partial` in `varnames()`:
